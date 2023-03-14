@@ -41,7 +41,7 @@ HOMEWORK_VERDICTS = {
 
 
 def check_tokens():
-    """Проверяет доступность переменных окружения"""
+    """Проверяет доступность переменных окружения."""
     list_tokens = [
         PRACTICUM_TOKEN,
         TELEGRAM_TOKEN,
@@ -51,18 +51,18 @@ def check_tokens():
 
 
 def send_message(bot, message):
-    """Отправляет сообщение в Telegram чат"""
+    """Отправляет сообщение в Telegram чат."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
         logger.debug(f'Новое сообщение в чате: {message}')
-    except telegram.TelegramError as error:
+    except telegram.TelegramError:
         logger.error('Не удалось отправить сообщение об ошибке!')
     except Exception as error:
         raise SendMessageFailed(f'Не удалось отправить сообщение: {error}')
 
 
 def get_api_answer(timestamp):
-    """Делает запрос к эндпоинту API-сервиса"""
+    """Делает запрос к эндпоинту API-сервиса."""
     params = {'from_date': timestamp}
     api_params = {
         'url': ENDPOINT,
@@ -78,8 +78,9 @@ def get_api_answer(timestamp):
     except requests.exceptions.RequestException as e:
         logger.info(e)
 
+
 def check_response(response):
-    """Проверяет ответ API на соответствие документации"""
+    """Проверяет ответ API на соответствие документации."""
     if not isinstance(response, dict):
         message = f'Данные пришли не в dict, а в {type(response)}'
         raise TypeError(message)
@@ -92,9 +93,10 @@ def check_response(response):
         raise EmptyResponse(message)
     return response.get('homeworks')
 
+
 def parse_status(homework):
-    """извлекает из информации о конкретной 
-        домашней работе статус этой работы"""
+    """Извлекает из информации о конкретной
+    домашней работе статус этой работы."""
     homework_name = homework.get('homework_name')
     status = homework.get('status')
     if not homework_name:
@@ -132,7 +134,6 @@ def main():
             logger.error(message)
         finally:
             time.sleep(RETRY_PERIOD)
-
 
 
 if __name__ == '__main__':
