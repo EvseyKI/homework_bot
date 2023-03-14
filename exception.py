@@ -6,3 +6,6 @@ class ConnectionError(Exception):
 
 class EmptyResponse(Exception):
     pass
+
+class HTTPRequestError(Exception):
+    pass

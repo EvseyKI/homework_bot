@@ -1,12 +1,28 @@
-import os
-from dotenv import load_dotenv
 import logging
-from exception import SendMessageFailed, ConnectionError, EmptyResponse
+import os
+import sys
+import time
+from http import HTTPStatus
+from logging.handlers import RotatingFileHandler
+
 import requests
+import telegram
+from dotenv import load_dotenv
+
+from exception import EmptyResponse, HTTPRequestError, SendMessageFailed
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = RotatingFileHandler(
+    'my_logger.log',
+    maxBytes=50000000,
+    backupCount=2
+)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -38,7 +54,9 @@ def send_message(bot, message):
     """Отправляет сообщение в Telegram чат"""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
-        logger.info(f'Новое сообщение в чате: {message}')
+        logger.debug(f'Новое сообщение в чате: {message}')
+    except telegram.TelegramError as error:
+        logger.error('Не удалось отправить сообщение об ошибке!')
     except Exception as error:
         raise SendMessageFailed(f'Не удалось отправить сообщение: {error}')
 
@@ -54,59 +72,67 @@ def get_api_answer(timestamp):
     try:
         logger.info('Запрос к API')
         response = requests.get(**api_params)
-    except Exception as error:
-        raise ConnectionError(f'Ошибка запроса: {error}')
-    return response.json()
-
+        if response.status_code != HTTPStatus.OK:
+            raise HTTPRequestError(response)
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.info(e)
 
 def check_response(response):
     """Проверяет ответ API на соответствие документации"""
     if not isinstance(response, dict):
-        message = (
-            f'Данные пришли не в dict, а в {type(response)}'
-        )
+        message = f'Данные пришли не в dict, а в {type(response)}'
         raise TypeError(message)
     if not isinstance(response.get('homeworks'), list):
         received_data = response.get('homeworks')
-        message = (
-            f'Данные пришли не в list, а в {type(received_data)}'
-        )
+        message = f'Данные пришли не в list, а в {type(received_data)}'
         raise TypeError(message)
     if 'homeworks' not in response:
-        message = ('Ответ не содержит домашних работ.')
+        message = 'Ответ не содержит домашних работ.'
         raise EmptyResponse(message)
-
+    return response.get('homeworks')
 
 def parse_status(homework):
     """извлекает из информации о конкретной 
         домашней работе статус этой работы"""
     homework_name = homework.get('homework_name')
     status = homework.get('status')
+    if not homework_name:
+        message = 'У работы отсутствует name'
+        raise KeyError(message)
+    if status not in HOMEWORK_VERDICTS:
+        message = 'Статус работы неизвестен, либо отсутствует'
+        raise EmptyResponse(message)
     return (
-        f'Изменился статус проверки работы "{homework_name}". {verdict}'
+        'Изменился статус проверки работы "{homework_name}". {verdict}'
         .format(homework_name=homework_name, verdict=HOMEWORK_VERDICTS[status])
     )
 
 
 def main():
     """Основная логика работы бота."""
-
-    ...
-
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-
-    ...
-
+    if not check_tokens():
+        message = 'Не все токены доступны'
+        logger.critical(message)
+        sys.exite(message)
     while True:
         try:
-
-            ...
-
+            response = get_api_answer(timestamp)
+            homeworks = check_response(response)
+            if homeworks:
+                homework = homeworks[0]
+                message = parse_status(homework)
+                send_message(bot, message)
+            else:
+                logger.debug('Нет проверенной домашней работы')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            ...
-        ...
+            logger.error(message)
+        finally:
+            time.sleep(RETRY_PERIOD)
+
 
 
 if __name__ == '__main__':
