@@ -95,8 +95,10 @@ def check_response(response):
 
 
 def parse_status(homework):
-    """Извлекает из информации о конкретной
-    домашней работе статус этой работы."""
+    """
+    Извлекает из информации о конкретной
+    домашней работе статус этой работы.
+    """
     homework_name = homework.get('homework_name')
     status = homework.get('status')
     if not homework_name:
