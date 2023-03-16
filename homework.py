@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -61,8 +62,9 @@ def send_message(bot, message):
         raise SendMessageFailed(f'Не удалось отправить сообщение: {error}')
 
 
-def get_api_answer(timestamp):
+def get_api_answer(current_timestamp):
     """Делает запрос к эндпоинту API-сервиса."""
+    timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     api_params = {
         'url': ENDPOINT,
@@ -75,22 +77,27 @@ def get_api_answer(timestamp):
         if response.status_code != HTTPStatus.OK:
             raise HTTPRequestError(response)
         return response.json()
-    except requests.exceptions.RequestException as e:
+    except requests.RequestException as e:
         logger.info(e)
+    except json.decoder.JSONDecodeError:
+        logger.info('Проблема с функцией json')
 
 
 def check_response(response):
     """Проверяет ответ API на соответствие документации."""
+    if not response:
+        message = 'В ответ получен пустой словарь!'
+        raise EmptyResponse(message)
     if not isinstance(response, dict):
         message = f'Данные пришли не в dict, а в {type(response)}'
-        raise TypeError(message)
-    if not isinstance(response.get('homeworks'), list):
-        received_data = response.get('homeworks')
-        message = f'Данные пришли не в list, а в {type(received_data)}'
         raise TypeError(message)
     if 'homeworks' not in response:
         message = 'Ответ не содержит домашних работ.'
         raise EmptyResponse(message)
+    if not isinstance(response.get('homeworks'), list):
+        received_data = response.get('homeworks')
+        message = f'Данные пришли не в list, а в {type(received_data)}'
+        raise TypeError(message)
     return response.get('homeworks')
 
 
@@ -113,14 +120,15 @@ def parse_status(homework):
 def main():
     """Основная логика работы бота."""
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
+    current_timestamp = int(time.time())
     if not check_tokens():
         message = 'Не все токены доступны'
         logger.critical(message)
         sys.exite(message)
     while True:
         try:
-            response = get_api_answer(timestamp)
+            response = get_api_answer(current_timestamp)
+            current_timestamp = response.get('current_date')
             homeworks = check_response(response)
             if homeworks:
                 homework = homeworks[0]
