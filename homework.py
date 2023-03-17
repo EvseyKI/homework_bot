@@ -94,9 +94,16 @@ def check_response(response):
     if 'homeworks' not in response:
         message = 'Ответ не содержит домашних работ.'
         raise EmptyResponse(message)
+    if 'current_date' not in response:
+        message = 'Ответ не содержит текущее время'
+        raise EmptyResponse(message)
     if not isinstance(response.get('homeworks'), list):
         received_data = response.get('homeworks')
         message = f'Данные пришли не в list, а в {type(received_data)}'
+        raise TypeError(message)
+    if not isinstance(response.get('current_date'), int):
+        received_data = response.get('current_date')
+        message = f'Данные пришли не в int, а в {type(received_data)}'
         raise TypeError(message)
     return response.get('homeworks')
 
